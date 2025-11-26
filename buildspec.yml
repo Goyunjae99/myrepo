@@ -11,18 +11,31 @@ phases:
   pre_build:
     commands:
       - echo "Login to ECR"
-      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
       - export TASK_DEF_ARN=$(aws ecs describe-services --cluster mycluster --services myweb-svc --query 'services[0].taskDefinition' --output text)
       - export CONTAINER_NAME=$(aws ecs describe-task-definition --task-definition $TASK_DEF_ARN --query 'taskDefinition.containerDefinitions[0].name' --output text)
-      - echo "CONTAINER_NAME=$CONTAINER_NAME"
+      - echo "Container name is: $CONTAINER_NAME"
+
   build:
     commands:
       - docker build -t ${REPO_NAME}:${IMAGE_TAG} .
-      - docker tag ${REPO_NAME}:${IMAGE_TAG} ${ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${REPO_NAME}:${IMAGE_TAG}
+      - docker tag ${REPO_NAME}:${IMAGE_TAG} $ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/${REPO_NAME}:${IMAGE_TAG}
+
   post_build:
     commands:
-      - docker push ${ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${REPO_NAME}:${IMAGE_TAG}
-      - printf '[{"name":"%s","imageUri":"%s"}]' "$CONTAINER_NAME" "${ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${REPO_NAME}:${IMAGE_TAG}" > imagedefinitions.json
+      - docker push $ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/${REPO_NAME}:${IMAGE_TAG}
+      - echo "Generating imagedefinitions.json"
+      - |
+        cat <<EOF > imagedefinitions.json
+        [
+          {
+            "name": "$CONTAINER_NAME",
+            "imageUri": "$ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$REPO_NAME:$IMAGE_TAG"
+          }
+        ]
+        EOF
+
 artifacts:
   files:
     - imagedefinitions.json
+
